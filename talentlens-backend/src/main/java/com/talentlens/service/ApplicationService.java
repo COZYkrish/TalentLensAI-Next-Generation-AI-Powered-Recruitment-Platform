@@ -101,7 +101,39 @@ public class ApplicationService {
                 .orElseThrow(() -> new RuntimeException("Application not found"));
         
         String resumeText = app.getRawResumeText() != null ? app.getRawResumeText() : "";
-        return aiClientService.getInterviewQuestions(resumeText, app.getJob().getDescription());
+        Map<String, Object> rawQuestions = aiClientService.getInterviewQuestions(resumeText, app.getJob().getDescription());
+        
+        List<Map<String, String>> mappedQuestions = new java.util.ArrayList<>();
+        
+        if (rawQuestions.containsKey("technical")) {
+            Object techObj = rawQuestions.get("technical");
+            if (techObj instanceof List) {
+                List<String> tech = (List<String>) techObj;
+                for (String q : tech) {
+                    Map<String, String> item = new java.util.HashMap<>();
+                    item.put("type", "TECHNICAL");
+                    item.put("question", q);
+                    mappedQuestions.add(item);
+                }
+            }
+        }
+        
+        if (rawQuestions.containsKey("behavioral")) {
+            Object behObj = rawQuestions.get("behavioral");
+            if (behObj instanceof List) {
+                List<String> beh = (List<String>) behObj;
+                for (String q : beh) {
+                    Map<String, String> item = new java.util.HashMap<>();
+                    item.put("type", "BEHAVIORAL");
+                    item.put("question", q);
+                    mappedQuestions.add(item);
+                }
+            }
+        }
+        
+        Map<String, Object> response = new java.util.HashMap<>();
+        response.put("questions", mappedQuestions);
+        return response;
     }
 
     public Map<String, Object> evaluateAnswer(Long applicationId, String question, String answer) {

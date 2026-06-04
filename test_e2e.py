@@ -82,4 +82,50 @@ for i, q in enumerate(questions[:2], 1):
 if len(questions) > 2:
     print("   ...")
 
+# 6. Schedule Interview (as Recruiter)
+print("\n6. Scheduling Interview (as Recruiter)...")
+interview_data = {
+    "applicationId": app_id,
+    "dateTime": "2026-06-05T10:00:00",
+    "duration": "45 min",
+    "type": "VIDEO",
+    "interviewers": ["John D.", "Jane S."]
+}
+res = requests.post(f"{BASE_URL}/interviews", json=interview_data, headers=headers)
+print(f"Status Code: {res.status_code}")
+assert res.status_code == 200, f"Interview scheduling failed: {res.text}"
+interview_id = res.json()["id"]
+print(f"✅ Success! Interview ID: {interview_id}, Status: {res.json()['status']}")
+
+# 7. Complete Interview & Submit Feedback (as Recruiter)
+print("\n7. Completing Interview & Submitting Feedback (as Recruiter)...")
+feedback_data = {
+    "score": 92,
+    "feedbackNotes": "Excellent system architecture responses. Fast learner."
+}
+res = requests.put(f"{BASE_URL}/interviews/{interview_id}/feedback", json=feedback_data, headers=headers)
+print(f"Status Code: {res.status_code}")
+assert res.status_code == 200, f"Feedback submission failed: {res.text}"
+assert res.json()["status"] == "COMPLETED", f"Expected COMPLETED status but got: {res.json()['status']}"
+print(f"✅ Success! Interview Status: {res.json()['status']}, Score: {res.json()['score']}%")
+
+# 8. Evaluate Candidate Practice Response (as Candidate)
+print("\n8. Evaluating Candidate Practice Answer (as Candidate)...")
+practice_data = {
+    "question": "Can you describe a complex problem you solved using React?",
+    "answer": "I built a large scale dashboard with virtualization rendering 10000 nodes, reducing paint times by 40% using useMemo and memoized components."
+}
+res = requests.post(
+    f"{BASE_URL}/applications/{app_id}/evaluate-answer", 
+    json=practice_data, 
+    headers={"Authorization": f"Bearer {candidate_token}"}
+)
+print(f"Status Code: {res.status_code}")
+assert res.status_code == 200, f"Practice answer evaluation failed: {res.text}"
+eval_result = res.json()
+print(f"✅ Success! AI Practice Score: {eval_result.get('score')}%")
+print(f"   AI Strengths: {eval_result.get('strengths')}")
+print(f"   AI Improvement Areas: {eval_result.get('improvements')}")
+print(f"   AI Reasoning: {eval_result.get('reasoning')}")
+
 print("\n🎉 ALL E2E TESTS PASSED! FULL PIPELINE VERIFIED! 🎉")
