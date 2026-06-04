@@ -107,7 +107,7 @@ export default function NewCandidatePage() {
     formData.append("file", file);
 
     try {
-      const res = await fetch("http://localhost:8000/api/v1/ai/parse-resume", {
+      const res = await fetch("http://localhost:8001/api/v1/ai/parse-resume", {
         method: "POST",
         body: formData,
       });
