@@ -7,17 +7,17 @@ from google.genai import types
 from dotenv import load_dotenv
 
 # Load env variables from .env
-load_dotenv()
+load_dotenv(override=True)
 
-# Initialize Gemini Client if key is present
-try:
-    if os.environ.get("GEMINI_API_KEY"):
-        client = genai.Client()
-    else:
-        client = None
-except Exception as e:
-    print(f"Error initializing Gemini client: {e}")
-    client = None
+def get_gemini_client():
+    load_dotenv(override=True)
+    api_key = os.environ.get("GEMINI_API_KEY")
+    if api_key and api_key.strip():
+        try:
+            return genai.Client()
+        except Exception as e:
+            print(f"Error creating Gemini client: {e}")
+    return None
 
 # Basic list of tech skills to look for in job descriptions (Fallback)
 TECH_SKILLS = {
@@ -33,6 +33,7 @@ def generate_skill_gaps(resume_skills: List[str], job_description: str) -> Tuple
     Extracts required skills from JD and compares with resume skills.
     Returns (missing_skills, ai_quality_insights).
     """
+    client = get_gemini_client()
     if not client:
         # Fallback to local rule-based match if Gemini client is not initialized
         jd_lower = job_description.lower()
@@ -85,6 +86,7 @@ def generate_interview_questions(resume_text: str, job_description: str) -> Tupl
     """
     Generates personalized interview questions based on the candidate's resume and JD.
     """
+    client = get_gemini_client()
     if not client:
         # Fallback to local rule-based match if Gemini client is not initialized
         jd_lower = job_description.lower()
@@ -144,6 +146,7 @@ def evaluate_candidate_answer(question: str, candidate_answer: str, job_descript
     """
     Evaluates candidate response to a question against job description.
     """
+    client = get_gemini_client()
     if not client:
         # Mock fallback if Gemini client is not initialized
         return 75.0, ["Clear response structure", "Relates to the core requirements"], ["Provide more concrete code or design examples"], "Mock grading output because Gemini API key is not configured."
