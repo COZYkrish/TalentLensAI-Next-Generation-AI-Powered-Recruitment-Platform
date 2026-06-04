@@ -1,0 +1,9 @@
+package com.talentlens.repository;
+
+import com.talentlens.entity.Job;
+import org.springframework.data.jpa.repository.JpaRepository;
+import java.util.List;
+
+public interface JobRepository extends JpaRepository<Job, Long> {
+    List<Job> findByCompanyId(Long companyId);
+}
