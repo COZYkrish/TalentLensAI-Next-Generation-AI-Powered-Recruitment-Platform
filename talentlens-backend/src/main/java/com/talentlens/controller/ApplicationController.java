@@ -40,6 +40,12 @@ public class ApplicationController {
         return ResponseEntity.ok(applicationService.getAllApplications());
     }
 
+    @GetMapping("/{id}")
+    @PreAuthorize("hasAnyRole('RECRUITER', 'CANDIDATE')")
+    public ResponseEntity<ApplicationResponse> getApplicationById(@PathVariable Long id) {
+        return ResponseEntity.ok(applicationService.getApplicationById(id));
+    }
+
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('RECRUITER')")
     public ResponseEntity<ApplicationResponse> updateStatus(

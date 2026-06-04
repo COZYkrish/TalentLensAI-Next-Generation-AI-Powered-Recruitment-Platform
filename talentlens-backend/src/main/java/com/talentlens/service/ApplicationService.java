@@ -90,6 +90,12 @@ public class ApplicationService {
                 .collect(Collectors.toList());
     }
 
+    public ApplicationResponse getApplicationById(Long id) {
+        Application app = applicationRepository.findById(id)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+        return ApplicationResponse.fromEntity(app);
+    }
+
     public Map<String, Object> getInterviewQuestions(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
