@@ -24,3 +24,15 @@ class InterviewQuestionRequest(BaseModel):
 class InterviewQuestionResponse(BaseModel):
     technical: List[str]
     behavioral: List[str]
+
+class EvaluateAnswerRequest(BaseModel):
+    question: str
+    candidate_answer: str
+    job_description: str
+
+class EvaluateAnswerResponse(BaseModel):
+    score: float
+    strengths: List[str]
+    improvements: List[str]
+    reasoning: str
+
