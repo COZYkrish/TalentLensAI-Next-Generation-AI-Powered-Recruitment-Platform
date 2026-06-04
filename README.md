@@ -43,14 +43,14 @@ TalentLens is built on a clean, three-tier microservice architecture:
 ```mermaid
 graph TD
     %% Client Tier
-    subgraph Client Tier [Client Tier - React / Next.js]
+    subgraph client_tier ["Client Tier - React / Next.js"]
         NextJS[Next.js App Router]
         Framer[Framer Motion Animations]
         Recharts[Recharts Data Visualization]
     end
 
     %% Service Tier
-    subgraph Service Tier [Service Tier - Spring Boot & FastAPI]
+    subgraph service_tier ["Service Tier - Spring Boot & FastAPI"]
         SpringAPI[Spring Boot REST API]
         FastAPI[FastAPI AI Service]
         SpringSecurity[Spring Security + JWT]
@@ -58,7 +58,7 @@ graph TD
     end
 
     %% Storage & Models
-    subgraph Storage & NLP Tier [Storage & Model Engine]
+    subgraph storage_tier ["Storage & Model Engine"]
         DB[(H2 Database / PostgreSQL)]
         HFModel[Sentence-Transformers all-MiniLM-L6-v2]
         SpacyModel[spaCy en_core_web_sm]
@@ -84,7 +84,7 @@ sequenceDiagram
     participant FE as Next.js Frontend
     participant BE as Spring Boot Backend
     participant AI as FastAPI AI Engine
-    database DB as PostgreSQL Database
+    participant DB as PostgreSQL Database
 
     Candidate->>FE: Upload mock_resume.pdf & click Apply
     FE->>BE: POST /applications/job/{jobId}/apply (Multipart Form)
