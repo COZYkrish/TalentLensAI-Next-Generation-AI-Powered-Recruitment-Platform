@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent } from "@/components/ui/card";
@@ -8,34 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
   Calendar, Clock, User, Briefcase, Video, MapPin, ChevronRight,
-  CheckCircle2, XCircle, Plus, X, Loader2,
+  CheckCircle2, XCircle, Plus, X, Loader2, Award, ClipboardList
 } from "lucide-react";
+import { useInterviews, Interview } from "@/hooks/useInterviews";
+import api from "@/lib/api";
 
 type InterviewStatus = "SCHEDULED" | "COMPLETED" | "CANCELLED";
 type InterviewType = "VIDEO" | "ON-SITE" | "PHONE";
-
-interface Interview {
-  id: number;
-  candidateName: string;
-  jobTitle: string;
-  department: string;
-  date: string;
-  time: string;
-  duration: string;
-  type: InterviewType;
-  status: InterviewStatus;
-  interviewers: string[];
-  avatarInitial: string;
-  score?: number;
-}
-
-const MOCK_INTERVIEWS: Interview[] = [
-  { id: 1, candidateName: "Alice Johnson", jobTitle: "Senior React Developer", department: "Engineering", date: "2026-06-03", time: "10:00 AM", duration: "60 min", type: "VIDEO", status: "SCHEDULED", interviewers: ["John D.", "Sara K."], avatarInitial: "A" },
-  { id: 2, candidateName: "Bob Smith", jobTitle: "Product Manager", department: "Product", date: "2026-06-04", time: "2:00 PM", duration: "45 min", type: "ON-SITE", status: "SCHEDULED", interviewers: ["Mike R."], avatarInitial: "B" },
-  { id: 3, candidateName: "Charlie Davis", jobTitle: "UX Designer", department: "Design", date: "2026-06-01", time: "11:30 AM", duration: "30 min", type: "PHONE", status: "COMPLETED", interviewers: ["Emily T."], avatarInitial: "C", score: 88 },
-  { id: 4, candidateName: "Diana Prince", jobTitle: "Senior React Developer", department: "Engineering", date: "2026-05-30", time: "3:00 PM", duration: "60 min", type: "VIDEO", status: "COMPLETED", interviewers: ["John D.", "Sara K."], avatarInitial: "D", score: 96 },
-  { id: 5, candidateName: "Ethan Hunt", jobTitle: "Backend Engineer", department: "Engineering", date: "2026-06-02", time: "9:00 AM", duration: "45 min", type: "VIDEO", status: "CANCELLED", interviewers: ["John D."], avatarInitial: "E" },
-];
 
 const TABS: { id: InterviewStatus | "ALL"; label: string }[] = [
   { id: "ALL", label: "All" },
@@ -67,10 +46,18 @@ function getInitials(name: string) {
 // ── Schedule Modal ──────────────────────────────────────────────────
 interface ScheduleModalProps {
   onClose: () => void;
-  onAdd: (interview: Interview) => void;
+  onAdd: (interview: {
+    applicationId: number;
+    dateTime: string;
+    duration: string;
+    type: string;
+    interviewers: string[];
+  }) => Promise<any>;
 }
 
 function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
+  const [applications, setApplications] = useState<any[]>([]);
+  const [selectedAppId, setSelectedAppId] = useState<number | null>(null);
   const [form, setForm] = useState({
     candidateName: "",
     jobTitle: "",
@@ -84,6 +71,13 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
   const [saving, setSaving] = useState(false);
   const [errors, setErrors] = useState<Record<string, string>>({});
 
+  useEffect(() => {
+    // Fetch all active applications to populate candidate picker
+    api.get("/applications")
+      .then((res) => setApplications(res.data))
+      .catch((err) => console.error("Error fetching applications:", err));
+  }, []);
+
   const set = (field: string, value: string) => {
     setForm((prev) => ({ ...prev, [field]: value }));
     setErrors((prev) => { const e = { ...prev }; delete e[field]; return e; });
@@ -91,8 +85,7 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
 
   const validate = () => {
     const e: Record<string, string> = {};
-    if (!form.candidateName.trim()) e.candidateName = "Required";
-    if (!form.jobTitle.trim()) e.jobTitle = "Required";
+    if (!selectedAppId) e.applicationId = "Required";
     if (!form.date) e.date = "Required";
     if (!form.time) e.time = "Required";
     if (!form.interviewers.trim()) e.interviewers = "Required";
@@ -105,25 +98,22 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
     if (Object.keys(errs).length) { setErrors(errs); return; }
 
     setSaving(true);
-    await new Promise((r) => setTimeout(r, 600)); // simulate async
-
-    const newInterview: Interview = {
-      id: Date.now(),
-      candidateName: form.candidateName.trim(),
-      jobTitle: form.jobTitle.trim(),
-      department: form.department.trim() || "General",
-      date: form.date,
-      time: form.time,
-      duration: form.duration,
-      type: form.type,
-      status: "SCHEDULED",
-      interviewers: form.interviewers.split(",").map((s) => s.trim()).filter(Boolean),
-      avatarInitial: getInitials(form.candidateName),
-    };
-
-    setSaving(false);
-    onAdd(newInterview);
-    onClose();
+    try {
+      // date: "2026-06-03", time: "10:00" -> ISO: "2026-06-03T10:00:00"
+      const dateTimeString = `${form.date}T${form.time}:00`;
+      await onAdd({
+        applicationId: selectedAppId!,
+        dateTime: dateTimeString,
+        duration: form.duration,
+        type: form.type,
+        interviewers: form.interviewers.split(",").map((s) => s.trim()).filter(Boolean),
+      });
+      onClose();
+    } catch (err: any) {
+      setErrors({ submit: err.response?.data?.message || err.message });
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -157,43 +147,50 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
 
         {/* Form */}
         <form onSubmit={handleSubmit} className="px-7 py-6 space-y-5">
-          {/* Candidate & Job */}
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <Label htmlFor="candidateName">Candidate Name *</Label>
-              <Input
-                id="candidateName"
-                value={form.candidateName}
-                onChange={(e) => set("candidateName", e.target.value)}
-                placeholder="e.g. Alice Johnson"
-                className={`bg-background/50 ${errors.candidateName ? "border-red-500" : ""}`}
-              />
-              {errors.candidateName && <p className="text-xs text-red-400">{errors.candidateName}</p>}
-            </div>
-            <div className="space-y-1.5">
-              <Label htmlFor="jobTitle">Job Title *</Label>
-              <Input
-                id="jobTitle"
-                value={form.jobTitle}
-                onChange={(e) => set("jobTitle", e.target.value)}
-                placeholder="e.g. Senior React Developer"
-                className={`bg-background/50 ${errors.jobTitle ? "border-red-500" : ""}`}
-              />
-              {errors.jobTitle && <p className="text-xs text-red-400">{errors.jobTitle}</p>}
-            </div>
+          {/* Candidate Selection Dropdown */}
+          <div className="space-y-1.5">
+            <Label htmlFor="applicationSelect">Select Candidate Application *</Label>
+            <select
+              id="applicationSelect"
+              value={selectedAppId || ""}
+              onChange={(e) => {
+                const appId = Number(e.target.value);
+                setSelectedAppId(appId);
+                const app = applications.find(a => a.id === appId);
+                if (app) {
+                  set("candidateName", app.candidateName);
+                  set("jobTitle", app.jobTitle);
+                  set("department", app.department || "Engineering");
+                }
+              }}
+              className="w-full rounded-xl border border-border bg-background/50 px-3 py-2 text-sm text-foreground outline-none focus:border-foreground/30"
+            >
+              <option value="" className="bg-card">-- Select an active Application --</option>
+              {applications.map((app) => (
+                <option key={app.id} value={app.id} className="bg-card">
+                  {app.candidateName} - {app.jobTitle} (Match: {app.aiMatchScore}%)
+                </option>
+              ))}
+            </select>
+            {errors.applicationId && <p className="text-xs text-red-400">{errors.applicationId}</p>}
           </div>
 
-          {/* Department */}
-          <div className="space-y-1.5">
-            <Label htmlFor="department">Department</Label>
-            <Input
-              id="department"
-              value={form.department}
-              onChange={(e) => set("department", e.target.value)}
-              placeholder="e.g. Engineering"
-              className="bg-background/50"
-            />
-          </div>
+          {selectedAppId && (
+            <motion.div
+              initial={{ opacity: 0, height: 0 }}
+              animate={{ opacity: 1, height: "auto" }}
+              className="grid grid-cols-2 gap-4 border-t border-border/40 pt-4"
+            >
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground block">Candidate Name</span>
+                <span className="text-sm font-medium">{form.candidateName}</span>
+              </div>
+              <div className="space-y-1">
+                <span className="text-xs text-muted-foreground block">Target Role</span>
+                <span className="text-sm font-medium">{form.jobTitle} ({form.department})</span>
+              </div>
+            </motion.div>
+          )}
 
           {/* Date & Time */}
           <div className="grid grid-cols-2 gap-4">
@@ -277,6 +274,8 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
             {errors.interviewers && <p className="text-xs text-red-400">{errors.interviewers}</p>}
           </div>
 
+          {errors.submit && <p className="text-xs text-red-400 font-medium">{errors.submit}</p>}
+
           {/* Footer */}
           <div className="flex justify-end gap-3 pt-2">
             <Button type="button" variant="outline" onClick={onClose} className="rounded-xl cursor-pointer">
@@ -298,19 +297,30 @@ function ScheduleModal({ onClose, onAdd }: ScheduleModalProps) {
 
 // ── Main Page ────────────────────────────────────────────────────────
 export default function InterviewsPage() {
+  const { interviews, loading, scheduleInterview, updateStatus, submitFeedback } = useInterviews();
   const [activeTab, setActiveTab] = useState<InterviewStatus | "ALL">("ALL");
-  const [interviews, setInterviews] = useState<Interview[]>(MOCK_INTERVIEWS);
   const [showModal, setShowModal] = useState(false);
+
+  // Recruiter grading state
+  const [gradingInterviewId, setGradingInterviewId] = useState<number | null>(null);
+  const [feedbackScore, setFeedbackScore] = useState<number>(85);
+  const [feedbackNotes, setFeedbackNotes] = useState<string>("");
+  const [submittingFeedback, setSubmittingFeedback] = useState(false);
 
   const filtered = activeTab === "ALL" ? interviews : interviews.filter((i) => i.status === activeTab);
 
-  const updateStatus = (id: number, status: InterviewStatus) => {
-    setInterviews((prev) => prev.map((i) => (i.id === id ? { ...i, status } : i)));
-  };
-
-  const addInterview = (interview: Interview) => {
-    setInterviews((prev) => [interview, ...prev]);
-    setActiveTab("SCHEDULED");
+  const handleGradingSubmit = async (interviewId: number) => {
+    setSubmittingFeedback(true);
+    try {
+      await submitFeedback(interviewId, feedbackScore, feedbackNotes);
+      setGradingInterviewId(null);
+      setFeedbackScore(85);
+      setFeedbackNotes("");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setSubmittingFeedback(false);
+    }
   };
 
   const upcoming = interviews.filter((i) => i.status === "SCHEDULED").length;
@@ -320,7 +330,7 @@ export default function InterviewsPage() {
       {/* Modal */}
       <AnimatePresence>
         {showModal && (
-          <ScheduleModal onClose={() => setShowModal(false)} onAdd={addInterview} />
+          <ScheduleModal onClose={() => setShowModal(false)} onAdd={scheduleInterview} />
         )}
       </AnimatePresence>
 
@@ -329,7 +339,11 @@ export default function InterviewsPage() {
           <h1 className="text-3xl font-serif tracking-tighter mb-2">Interviews</h1>
           <p className="text-muted-foreground">
             Manage your candidate interviews across all active roles.{" "}
-            <span className="text-[var(--accent-green)] font-medium">{upcoming} upcoming</span>
+            {loading ? (
+              <span className="text-xs text-muted-foreground animate-pulse ml-2">Loading...</span>
+            ) : (
+              <span className="text-[var(--accent-green)] font-medium">{upcoming} upcoming</span>
+            )}
           </p>
         </div>
         <Button
@@ -376,7 +390,11 @@ export default function InterviewsPage() {
       {/* Interview List */}
       <div className="space-y-4">
         <AnimatePresence mode="popLayout">
-          {filtered.length === 0 && (
+          {loading ? (
+            <div className="flex items-center justify-center py-16 text-muted-foreground gap-2">
+              <Loader2 className="w-6 h-6 animate-spin text-[var(--accent-green)]" /> Loading live interviews...
+            </div>
+          ) : filtered.length === 0 ? (
             <motion.div
               key="empty"
               initial={{ opacity: 0 }}
@@ -385,92 +403,151 @@ export default function InterviewsPage() {
             >
               No interviews in this category.
             </motion.div>
-          )}
-          {filtered.map((interview) => {
-            const TypeIcon = typeIcons[interview.type];
-            const statusStyle = statusStyles[interview.status];
-            return (
-              <motion.div
-                key={interview.id}
-                layout
-                initial={{ opacity: 0, y: 10 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, scale: 0.97 }}
-                transition={{ duration: 0.2 }}
-              >
-                <Card className="bg-card/50 backdrop-blur-xl border-border hover:border-primary/30 transition-colors">
-                  <CardContent className="p-5">
-                    <div className="flex items-center gap-4">
-                      <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg shrink-0">
-                        {interview.avatarInitial}
-                      </div>
+          ) : (
+            filtered.map((interview) => {
+              const TypeIcon = typeIcons[interview.type] || Video;
+              const statusStyle = statusStyles[interview.status];
+              const initials = getInitials(interview.candidateName);
+              return (
+                <motion.div
+                  key={interview.id}
+                  layout
+                  initial={{ opacity: 0, y: 10 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, scale: 0.97 }}
+                  transition={{ duration: 0.2 }}
+                >
+                  <Card className="bg-card/50 backdrop-blur-xl border-border hover:border-primary/30 transition-colors">
+                    <CardContent className="p-5">
+                      <div className="flex items-center gap-4">
+                        <div className="w-12 h-12 rounded-full bg-primary/10 border border-primary/20 flex items-center justify-center text-primary font-bold text-lg shrink-0">
+                          {initials}
+                        </div>
 
-                      <div className="flex-1 min-w-0">
-                        <div className="flex items-center gap-3 flex-wrap">
-                          <h3 className="font-semibold text-base">{interview.candidateName}</h3>
-                          <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${statusStyle.bg} ${statusStyle.text}`}>
-                            {statusStyle.label}
-                          </span>
-                          {interview.score && (
-                            <span className="text-xs font-medium text-[var(--accent-green)] bg-[var(--accent-green)]/10 px-2.5 py-0.5 rounded-full">
-                              Score: {interview.score}%
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-3 flex-wrap">
+                            <h3 className="font-semibold text-base">{interview.candidateName}</h3>
+                            <span className={`inline-flex items-center text-xs font-medium px-2.5 py-0.5 rounded-full ${statusStyle?.bg || 'bg-border/30'} ${statusStyle?.text || 'text-muted'}`}>
+                              {statusStyle?.label || interview.status}
                             </span>
+                            {interview.score && (
+                              <span className="text-xs font-medium text-[var(--accent-green)] bg-[var(--accent-green)]/10 px-2.5 py-0.5 rounded-full flex items-center gap-1">
+                                <Award className="w-3.5 h-3.5" /> Score: {interview.score}%
+                              </span>
+                            )}
+                          </div>
+                          <p className="text-sm text-muted-foreground mt-0.5">
+                            <Briefcase className="w-3 h-3 inline mr-1" />
+                            {interview.jobTitle} · {interview.department}
+                          </p>
+                          <div className="flex items-center gap-4 mt-2 flex-wrap text-xs text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="w-3.5 h-3.5" />
+                              {new Date(interview.dateTime.split("T")[0]).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="w-3.5 h-3.5" />
+                              {interview.dateTime.split("T")[1]?.slice(0, 5) || interview.dateTime} · {interview.duration}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <TypeIcon className="w-3.5 h-3.5" />
+                              {interview.type}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <User className="w-3.5 h-3.5" />
+                              {interview.interviewers.join(", ")}
+                            </span>
+                          </div>
+
+                          {/* Recruiter feedback notes display */}
+                          {interview.feedbackNotes && (
+                            <div className="mt-3 p-3 bg-background/30 border border-border/40 rounded-xl text-xs flex gap-2 text-muted-foreground">
+                              <ClipboardList className="w-3.5 h-3.5 mt-0.5 text-[var(--accent-green)] shrink-0" />
+                              <p><strong className="text-foreground">Feedback:</strong> {interview.feedbackNotes}</p>
+                            </div>
+                          )}
+
+                          {/* Inline Feedback Grading Form */}
+                          {gradingInterviewId === interview.id && (
+                            <motion.div
+                              initial={{ opacity: 0, y: -10 }}
+                              animate={{ opacity: 1, y: 0 }}
+                              className="mt-4 p-4 border border-border bg-background/50 rounded-2xl space-y-3"
+                            >
+                              <div className="flex items-center justify-between">
+                                <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Submit Interview Feedback</h4>
+                                <button onClick={() => setGradingInterviewId(null)} className="text-xs text-muted-foreground hover:text-foreground">Cancel</button>
+                              </div>
+                              <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                                <div className="space-y-1">
+                                  <Label htmlFor="gradeScore">Rating (0-100)</Label>
+                                  <Input
+                                    id="gradeScore"
+                                    type="number"
+                                    min="0"
+                                    max="100"
+                                    value={feedbackScore}
+                                    onChange={(e) => setFeedbackScore(Number(e.target.value))}
+                                    className="h-9 bg-background/50 text-sm"
+                                  />
+                                </div>
+                                <div className="md:col-span-3 space-y-1">
+                                  <Label htmlFor="feedbackComments">Feedback Notes</Label>
+                                  <Input
+                                    id="feedbackComments"
+                                    value={feedbackNotes}
+                                    onChange={(e) => setFeedbackNotes(e.target.value)}
+                                    placeholder="Enter summary notes on technical skills, communication, fit..."
+                                    className="h-9 bg-background/50 text-sm"
+                                  />
+                                </div>
+                              </div>
+                              <div className="flex justify-end">
+                                <Button
+                                  size="sm"
+                                  className="h-8 text-xs bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 cursor-pointer"
+                                  disabled={submittingFeedback}
+                                  onClick={() => handleGradingSubmit(interview.id)}
+                                >
+                                  {submittingFeedback ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <CheckCircle2 className="w-3.5 h-3.5 mr-1" />}
+                                  Submit Grading & Complete
+                                </Button>
+                              </div>
+                            </motion.div>
                           )}
                         </div>
-                        <p className="text-sm text-muted-foreground mt-0.5">
-                          <Briefcase className="w-3 h-3 inline mr-1" />
-                          {interview.jobTitle} · {interview.department}
-                        </p>
-                        <div className="flex items-center gap-4 mt-2 flex-wrap text-xs text-muted-foreground">
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3.5 h-3.5" />
-                            {new Date(interview.date).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric" })}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <Clock className="w-3.5 h-3.5" />
-                            {interview.time} · {interview.duration}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <TypeIcon className="w-3.5 h-3.5" />
-                            {interview.type}
-                          </span>
-                          <span className="flex items-center gap-1">
-                            <User className="w-3.5 h-3.5" />
-                            {interview.interviewers.join(", ")}
-                          </span>
+
+                        <div className="flex items-center gap-2 shrink-0 self-start mt-1">
+                          {interview.status === "SCHEDULED" && gradingInterviewId !== interview.id && (
+                            <>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="h-8 text-xs rounded-lg border-red-500/30 text-red-400 hover:bg-red-500/10 cursor-pointer"
+                                onClick={() => updateStatus(interview.id, "CANCELLED")}
+                              >
+                                <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel
+                              </Button>
+                              <Button
+                                size="sm"
+                                className="h-8 text-xs rounded-lg bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 cursor-pointer"
+                                onClick={() => setGradingInterviewId(interview.id)}
+                              >
+                                <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Complete
+                              </Button>
+                            </>
+                          )}
+                          <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg cursor-pointer">
+                            <ChevronRight className="w-4 h-4" />
+                          </Button>
                         </div>
                       </div>
-
-                      <div className="flex items-center gap-2 shrink-0">
-                        {interview.status === "SCHEDULED" && (
-                          <>
-                            <Button
-                              size="sm"
-                              variant="outline"
-                              className="h-8 text-xs rounded-lg border-red-500/30 text-red-400 hover:bg-red-500/10 cursor-pointer"
-                              onClick={() => updateStatus(interview.id, "CANCELLED")}
-                            >
-                              <XCircle className="w-3.5 h-3.5 mr-1" /> Cancel
-                            </Button>
-                            <Button
-                              size="sm"
-                              className="h-8 text-xs rounded-lg bg-[var(--accent-green)] text-black hover:bg-[var(--accent-green)]/90 cursor-pointer"
-                              onClick={() => updateStatus(interview.id, "COMPLETED")}
-                            >
-                              <CheckCircle2 className="w-3.5 h-3.5 mr-1" /> Complete
-                            </Button>
-                          </>
-                        )}
-                        <Button size="sm" variant="ghost" className="h-8 w-8 p-0 rounded-lg cursor-pointer">
-                          <ChevronRight className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  </CardContent>
-                </Card>
-              </motion.div>
-            );
-          })}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              );
+            })
+          )}
         </AnimatePresence>
       </div>
     </div>

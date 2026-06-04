@@ -29,6 +29,9 @@ public class Application {
     @Column(columnDefinition = "TEXT")
     private String aiInsights; // Text summary of why they match
 
+    @Column(columnDefinition = "TEXT")
+    private String rawResumeText; // Extracted plain text of resume
+
     private String resumeUrl; // URL of the submitted resume
 
     @CreationTimestamp

@@ -34,6 +34,12 @@ public class ApplicationController {
         return ResponseEntity.ok(applicationService.getApplicationsForJob(jobId));
     }
 
+    @GetMapping
+    @PreAuthorize("hasRole('RECRUITER')")
+    public ResponseEntity<List<ApplicationResponse>> getAllApplications() {
+        return ResponseEntity.ok(applicationService.getAllApplications());
+    }
+
     @PutMapping("/{id}/status")
     @PreAuthorize("hasRole('RECRUITER')")
     public ResponseEntity<ApplicationResponse> updateStatus(
@@ -43,9 +49,19 @@ public class ApplicationController {
     }
 
     @GetMapping("/{id}/interview-questions")
-    @PreAuthorize("hasRole('RECRUITER')")
+    @PreAuthorize("hasAnyRole('RECRUITER', 'CANDIDATE')")
     public ResponseEntity<Map<String, Object>> getInterviewQuestions(@PathVariable Long id) {
         return ResponseEntity.ok(applicationService.getInterviewQuestions(id));
+    }
+
+    @PostMapping("/{id}/evaluate-answer")
+    @PreAuthorize("hasRole('CANDIDATE')")
+    public ResponseEntity<Map<String, Object>> evaluateAnswer(
+            @PathVariable Long id,
+            @RequestBody Map<String, String> body) {
+        String question = body.get("question");
+        String answer = body.get("answer");
+        return ResponseEntity.ok(applicationService.evaluateAnswer(id, question, answer));
     }
 }
 

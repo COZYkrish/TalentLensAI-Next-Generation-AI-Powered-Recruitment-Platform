@@ -63,6 +63,7 @@ public class ApplicationService {
                 .status("APPLIED")
                 .aiMatchScore(matchScore)
                 .aiInsights(aiInsights)
+                .rawResumeText(resumeText)
                 .resumeUrl("/uploads/" + resume.getOriginalFilename()) // Mock URL
                 .build();
 
@@ -83,11 +84,25 @@ public class ApplicationService {
                 .collect(Collectors.toList());
     }
 
+    public List<ApplicationResponse> getAllApplications() {
+        return applicationRepository.findAll().stream()
+                .map(ApplicationResponse::fromEntity)
+                .collect(Collectors.toList());
+    }
+
     public Map<String, Object> getInterviewQuestions(Long applicationId) {
         Application app = applicationRepository.findById(applicationId)
                 .orElseThrow(() -> new RuntimeException("Application not found"));
         
-        return aiClientService.getInterviewQuestions("Candidate resume text mock", app.getJob().getDescription());
+        String resumeText = app.getRawResumeText() != null ? app.getRawResumeText() : "";
+        return aiClientService.getInterviewQuestions(resumeText, app.getJob().getDescription());
+    }
+
+    public Map<String, Object> evaluateAnswer(Long applicationId, String question, String answer) {
+        Application app = applicationRepository.findById(applicationId)
+                .orElseThrow(() -> new RuntimeException("Application not found"));
+        
+        return aiClientService.evaluateAnswer(question, answer, app.getJob().getDescription());
     }
 }
 

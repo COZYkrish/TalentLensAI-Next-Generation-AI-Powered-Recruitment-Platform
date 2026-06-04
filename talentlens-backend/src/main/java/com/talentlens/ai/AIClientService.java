@@ -91,4 +91,28 @@ public class AIClientService {
         }
         return new HashMap<>();
     }
+
+    public Map<String, Object> evaluateAnswer(String question, String answer, String jobDescription) {
+        String url = AI_BASE_URL + "/evaluate-answer";
+
+        HttpHeaders headers = new HttpHeaders();
+        headers.setContentType(MediaType.APPLICATION_JSON);
+
+        Map<String, String> requestBody = new HashMap<>();
+        requestBody.put("question", question);
+        requestBody.put("candidate_answer", answer);
+        requestBody.put("job_description", jobDescription);
+
+        HttpEntity<Map<String, String>> request = new HttpEntity<>(requestBody, headers);
+
+        try {
+            ResponseEntity<Map> response = restTemplate.postForEntity(url, request, Map.class);
+            if (response.getStatusCode().is2xxSuccessful() && response.getBody() != null) {
+                return response.getBody();
+            }
+        } catch (Exception e) {
+            System.err.println("Error calling FastAPI evaluate-answer: " + e.getMessage());
+        }
+        return new HashMap<>();
+    }
 }
